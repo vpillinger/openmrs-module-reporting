@@ -20,6 +20,7 @@ import org.openmrs.module.reporting.report.definition.service.ReportDefinitionSe
 import org.openmrs.module.reporting.report.renderer.CsvReportRenderer;
 import org.openmrs.module.reporting.report.renderer.IndicatorReportRenderer;
 import org.openmrs.module.reporting.report.renderer.ReportRenderer;
+import org.openmrs.module.reporting.report.renderer.SimpleDojoReportRenderer;
 import org.openmrs.module.reporting.report.renderer.SimpleHtmlReportRenderer;
 import org.openmrs.module.reporting.report.renderer.TsvReportRenderer;
 import org.openmrs.module.reporting.report.renderer.XmlReportRenderer;
@@ -124,6 +125,9 @@ public class RenderReportFormController {
 					response.setContentType("text/xml");				
 					response.setHeader("Content-Disposition", "attachment; filename=\"" + filename + "\"");  				
 					new XmlReportRenderer().render(reportData, null, response.getOutputStream());					
+				}
+				else if ("dojo".equalsIgnoreCase(format)) {
+					new SimpleDojoReportRenderer().render(reportData, null, response.getOutputStream());
 				}
 				else if ("indicator".equalsIgnoreCase(format)) {  
 					model = new ModelAndView("/module/reporting/reports/renderReportData");

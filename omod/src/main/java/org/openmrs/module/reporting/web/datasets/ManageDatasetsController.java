@@ -32,6 +32,7 @@ import org.openmrs.module.reporting.report.definition.ReportDefinition;
 import org.openmrs.module.reporting.report.definition.service.ReportDefinitionService;
 import org.openmrs.module.reporting.report.renderer.CsvReportRenderer;
 import org.openmrs.module.reporting.report.renderer.ReportRenderer;
+import org.openmrs.module.reporting.report.renderer.SimpleDojoReportRenderer;
 import org.openmrs.module.reporting.report.renderer.SimpleHtmlReportRenderer;
 import org.openmrs.module.reporting.report.renderer.TsvReportRenderer;
 import org.openmrs.module.reporting.report.renderer.XlsReportRenderer;
@@ -285,6 +286,8 @@ public class ManageDatasetsController {
 	    		renderer = new XlsReportRenderer();
 	    	} else if ("html".equalsIgnoreCase(format)) { 
 	    		renderer = new SimpleHtmlReportRenderer();
+	    	} else if ("dojo".equalsIgnoreCase(format)) {
+	    		renderer = new SimpleDojoReportRenderer();
 	    	}
 	    	
 	    	// Step 6

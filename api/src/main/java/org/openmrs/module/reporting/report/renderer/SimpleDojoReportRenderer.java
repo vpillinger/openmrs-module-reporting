@@ -17,6 +17,8 @@ import java.io.IOException;
 import java.io.OutputStream;
 import java.io.OutputStreamWriter;
 import java.io.Writer;
+import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 import java.util.HashMap;
 import java.util.Set;
@@ -57,9 +59,11 @@ public class SimpleDojoReportRenderer extends ReportDesignRenderer
 	public void render(ReportData results, String argument, OutputStream out) throws IOException, RenderingException
 	{
 		HashMap<String, Integer> valuesMap = new HashMap<String, Integer>();
-
+		String title = "";
+		
 		for (String key: results.getDataSets().keySet())
 		{
+			title = key;
 			DataSet dataset = results.getDataSets().get(key);
 			List<DataSetColumn> columns = dataset.getMetaData().getColumns();
 		
@@ -92,10 +96,12 @@ public class SimpleDojoReportRenderer extends ReportDesignRenderer
 		}
 
 		Set<String> keys = valuesMap.keySet();
+		ArrayList<String> keysList = new ArrayList<String>(keys);
+		Collections.sort(keysList);
 		StringBuilder dataString = new StringBuilder("var chartData = [");
 		StringBuilder labelsString = new StringBuilder("labels: [");
 		int count = 1;
-		for (String key: keys)
+		for (String key: keysList)
 		{
 			Integer val = valuesMap.get(key);
 			dataString.append(val + ",");
@@ -106,7 +112,9 @@ public class SimpleDojoReportRenderer extends ReportDesignRenderer
 		labelsString.deleteCharAt(labelsString.length() - 1);
 
 		dataString.append("];");
-		labelsString.append("]});");
+		labelsString.append("],");
+		
+		int maxBarWidth = 40;
 
 		Writer w = new OutputStreamWriter(out,"UTF-8");
 		
@@ -121,17 +129,19 @@ public class SimpleDojoReportRenderer extends ReportDesignRenderer
 		w.write(dataString.toString() + "\n");
 		w.write("dojo.ready(function(){\n");
 		w.write("var chart = new dojox.charting.Chart2D(\"chartNode\");\n");
-		w.write("chart.setTheme(dojox.charting.themes.MiamiNice);\nchart.addPlot(\"default\", { type: \"Columns\", markers: true, gap: 5});\n");
+		w.write("var mxBarWidth = " + maxBarWidth + ";");
+		w.write("chart.setTheme(dojox.charting.themes.MiamiNice);\nchart.addPlot(\"default\", { type: \"Columns\", markers: true, gap: 5, maxBarSize: mxBarWidth});\n");
 		w.write("chart.addAxis(\"x\", {\n");
 		w.write(labelsString.toString() + "\n");
-		w.write("chart.addAxis(\"y\", {vertical: true, fixLower: \"major\", fixUpper: \"major\"});\n");
-		w.write("chart.addSeries(\"Monthly Sales\", chartData);\n");
+		w.write("maxLabelSize: mxBarWidth, trailingSymbol: \"...\"});");
+		w.write("chart.addAxis(\"y\", {vertical: true, fixLower: \"major\", fixUpper: \"major\", includeZero: true});\n");
+		w.write("chart.addSeries(\"OpenMRS Report\", chartData);\n");
 		w.write("chart.render();});\n");
 		w.write("</script>\n");
 		w.write("</head>\n");
 		w.write("<body>\n");
-		w.write("<h2>Dojo Chart</h2>\n");
-		w.write("<div id=\"chartNode\" style=\"width: 500px; height: 550px;\"></div>\n");
+		w.write("<h2>" + title + " Chart</h2>\n");
+		w.write("<div id=\"chartNode\" style=\"width: " + (int)(maxBarWidth * keys.size() * 2.5) + "; height: 500;\"></div>\n");
 		w.write("</body>\n");
 		w.write("</html>\n");
 

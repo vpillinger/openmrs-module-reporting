@@ -4,17 +4,17 @@ import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 import org.openmrs.Obs;
 import org.openmrs.annotation.Handler;
-import org.openmrs.module.reporting.common.QueryBuilder;
-import org.openmrs.module.reporting.data.encounter.EncounterDataUtil;
+import org.openmrs.api.context.Context;
 import org.openmrs.module.reporting.data.encounter.EvaluatedEncounterData;
 import org.openmrs.module.reporting.data.encounter.definition.EncounterDataDefinition;
 import org.openmrs.module.reporting.data.encounter.definition.ObsForEncounterDataDefinition;
 import org.openmrs.module.reporting.evaluation.EvaluationContext;
 import org.openmrs.module.reporting.evaluation.EvaluationException;
+import org.openmrs.module.reporting.evaluation.querybuilder.HqlQueryBuilder;
+import org.openmrs.module.reporting.evaluation.service.EvaluationService;
 
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Set;
 
 /**
  * Evaluates a ObsForEncounterDataDefinition to produce EncounterData
@@ -30,47 +30,32 @@ public class ObsForEncounterDataEvaluator implements EncounterDataEvaluator {
         ObsForEncounterDataDefinition def = (ObsForEncounterDataDefinition) definition;
         EvaluatedEncounterData data = new EvaluatedEncounterData();
 
-        Set<Integer> encIds = EncounterDataUtil.getEncounterIdsForContext(context, false);
+		HqlQueryBuilder q = new HqlQueryBuilder();
+		q.select("obs.encounter.encounterId, obs");
+		q.from(Obs.class, "obs");
+		q.whereEqual("obs.concept", def.getQuestion());
+		q.whereEncounterIn("obs.encounter.encounterId", context);
 
-        // just return empty set if input set is empty
-        if (encIds.size() == 0) {
-            return data;
-        }
+		List<Object[]> result = Context.getService(EvaluationService.class).evaluateToList(q);
+        for (Object[] row : result) {
+            Integer encounterId = (Integer)row[0];
+			Obs obs = (Obs)row[1];
 
-		QueryBuilder qb = new QueryBuilder();
-		qb.addClause("select 	obs.encounter.encounterId, obs");
-		qb.addClause("from		Obs as obs");
-		qb.addClause("where		voided = false");
-		qb.addClause("and		concept = :question").withParameter("question", def.getQuestion());
-		if (encIds != null) {
-			qb.addClause("and	encounter.encounterId in (:encIds)").withParameter("encIds", encIds);
-		}
-		List<Object[]> results = (List<Object[]>)qb.execute();
-
-        // Create an entry for each encounter
-        for (Integer encId : encIds) {
-            if (!def.isSingleObs()) {
-                data.addData(encId, new ArrayList<Obs>());
-            }
-            else {
-                data.addData(encId, null);
-            }
-        }
-
-        // Now populate with actual results
-        for (Object[] result : results) {
-            Integer encId = (Integer)result[0];
-			Obs obs = (Obs)result[1];
-
-            if (!def.isSingleObs()) {
-                ((List<Obs>) data.getData().get(encId)).add(obs);
-            }
-            else {
-				if (data.getData().get(encId) != null) {
-					log.warn("Multiple matching obs for encounter <" + encId + ">. The last one will be returned.");
+			if (!def.isSingleObs()) {
+				List l = (List) data.getData().get(encounterId);
+				if (l == null) {
+					l = new ArrayList();
+					data.getData().put(encounterId, l);
 				}
-                data.addData(encId, obs);
-            }
+				l.add(obs);
+			}
+			else {
+				// If there are multiple matching providers and we are in singleProvider mode then last one wins
+				if (data.getData().get(encounterId) != null) {
+					log.warn("Multiple matching obs for encounter " + encounterId + "... picking one");
+				}
+				data.addData(encounterId, obs);
+			}
         }
 
         return data;

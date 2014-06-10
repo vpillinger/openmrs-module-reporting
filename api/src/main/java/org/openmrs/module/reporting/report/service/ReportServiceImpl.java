@@ -31,12 +31,12 @@ import org.openmrs.module.reporting.report.renderer.InteractiveReportRenderer;
 import org.openmrs.module.reporting.report.renderer.RenderingMode;
 import org.openmrs.module.reporting.report.renderer.ReportRenderer;
 import org.openmrs.module.reporting.report.service.db.ReportDAO;
+import org.openmrs.module.reporting.report.task.ReportingTimerTask;
 import org.openmrs.module.reporting.report.task.RunQueuedReportsTask;
 import org.openmrs.module.reporting.report.util.ReportUtil;
 import org.openmrs.module.reporting.serializer.ReportingSerializer;
 import org.openmrs.util.HandlerUtil;
 import org.openmrs.util.OpenmrsUtil;
-import org.springframework.core.task.TaskExecutor;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.io.BufferedOutputStream;
@@ -70,8 +70,8 @@ public class ReportServiceImpl extends BaseOpenmrsService implements ReportServi
 
 	// Private variables
 	private ReportDAO reportDAO;
-	private TaskExecutor taskExecutor;
-	private Map<String, Report> reportCache = new LinkedHashMap<String, Report>();
+	private ReportingTimerTask runQueuedReportsTask;
+	private Map<String, Report> reportCache = Collections.synchronizedMap(new LinkedHashMap<String, Report>());
 		
 	/**
 	 * Default constructor
@@ -102,7 +102,7 @@ public class ReportServiceImpl extends BaseOpenmrsService implements ReportServi
 	}
 
 	/** 
-	 * @see ReportService#getAllReportDesigns(Integer, boolean)
+	 * @see ReportService#getReportDesigns(ReportDefinition, Class, boolean)
 	 */
 	public List<ReportDesign> getReportDesigns(ReportDefinition reportDefinition, Class<? extends ReportRenderer> rendererType, 
 											   boolean includeRetired) throws APIException {
@@ -131,7 +131,7 @@ public class ReportServiceImpl extends BaseOpenmrsService implements ReportServi
 	}
 	
 	/**
-	 * @see ReportService#getPreferredReportRenderer()
+	 * @see ReportService#getReportRenderer(String)
 	 */
 	public ReportRenderer getReportRenderer(String className) {
 		try { 
@@ -148,7 +148,7 @@ public class ReportServiceImpl extends BaseOpenmrsService implements ReportServi
 	}
 	
 	/**
-	 * @see ReportService#getPreferredReportRenderer()
+	 * @see ReportService#getPreferredReportRenderer(Class)
 	 */
 	public ReportRenderer getPreferredReportRenderer(Class<Object> supportedType) {
 		return HandlerUtil.getPreferredHandler(ReportRenderer.class, supportedType);
@@ -200,7 +200,7 @@ public class ReportServiceImpl extends BaseOpenmrsService implements ReportServi
 	}
 
 	/**
-	 * @see ReportService#getReportRequests(ReportDefinition, Date, Date, Status)
+	 * @see ReportService#getReportRequests(ReportDefinition, Date, Date, Status[])
 	 */
 	@Transactional(readOnly=true)
 	public List<ReportRequest> getReportRequests(ReportDefinition reportDefinition, Date requestOnOrAfter, Date requestOnOrBefore, Status...statuses) {
@@ -208,7 +208,7 @@ public class ReportServiceImpl extends BaseOpenmrsService implements ReportServi
 	}
 
 	/**
-	 * @see ReportService#getReportRequests(ReportDefinition, Date, Date, Integer, Status)
+	 * @see ReportService#getReportRequests(ReportDefinition, Date, Date, Integer, Status[])
 	 */
 	@Transactional(readOnly=true)
 	public List<ReportRequest> getReportRequests(ReportDefinition reportDefinition, Date requestOnOrAfter, Date requestOnOrBefore, Integer mostRecentNum, Status...statuses) {
@@ -222,7 +222,7 @@ public class ReportServiceImpl extends BaseOpenmrsService implements ReportServi
 	public void purgeReportRequest(ReportRequest request) {
 		RunQueuedReportsTask reportsTask = RunQueuedReportsTask.getCurrentlyRunningRequests().get(request.getUuid());
 		if (reportsTask != null) {
-			reportsTask.cancelCurrentlyRunningReportingTask();
+			reportsTask.cancelTask();
 		}
 		reportDAO.purgeReportRequest(request);
 		reportCache.remove(request.getUuid());
@@ -271,7 +271,7 @@ public class ReportServiceImpl extends BaseOpenmrsService implements ReportServi
 	}
 
 	/**
-	 * @see ReportService#getReportProcessorConfigurations(ReportDefinition, Date, Date, Status)
+	 * @see ReportService#getReportProcessorConfigurations(Class)
 	 */
 	public List<ReportProcessorConfiguration> getReportProcessorConfigurations(Class<? extends ReportProcessor> processorType) {
 		List<ReportProcessorConfiguration> ret = new ArrayList<ReportProcessorConfiguration>();
@@ -379,7 +379,7 @@ public class ReportServiceImpl extends BaseOpenmrsService implements ReportServi
 	 * @see ReportService#processNextQueuedReports()
 	 */
 	public void processNextQueuedReports() {
-		taskExecutor.execute(new RunQueuedReportsTask());
+		runQueuedReportsTask.createAndRunTask();
 	}
 	
 	/**
@@ -636,7 +636,7 @@ public class ReportServiceImpl extends BaseOpenmrsService implements ReportServi
 				r.setPersisted(true);
 			}
 		}
-		if (reportCache.size() >= ReportingConstants.GLOBAL_PROPERTY_MAX_CACHED_REPORTS()) {
+		if (reportCache.size() > 0 && reportCache.size() >= ReportingConstants.GLOBAL_PROPERTY_MAX_CACHED_REPORTS()) {
 			Iterator<String> i = reportCache.keySet().iterator();
 			i.next();
 			i.remove();
@@ -729,31 +729,19 @@ public class ReportServiceImpl extends BaseOpenmrsService implements ReportServi
 	
 	//***** PROPERTY ACCESS *****
 
-	/**
-	 * @return the reportDAO
-	 */
 	public ReportDAO getReportDAO() {
 		return reportDAO;
 	}
 
-	/**
-	 * @param reportDAO the reportDAO to set
-	 */
 	public void setReportDAO(ReportDAO reportDAO) {
 		this.reportDAO = reportDAO;
 	}
 
-	/**
-	 * @return the taskExecutor
-	 */
-	public TaskExecutor getTaskExecutor() {
-		return taskExecutor;
+	public ReportingTimerTask getRunQueuedReportsTask() {
+		return runQueuedReportsTask;
 	}
 
-	/**
-	 * @param taskExecutor the taskExecutor to set
-	 */
-	public void setTaskExecutor(TaskExecutor taskExecutor) {
-		this.taskExecutor = taskExecutor;
+	public void setRunQueuedReportsTask(ReportingTimerTask runQueuedReportsTask) {
+		this.runQueuedReportsTask = runQueuedReportsTask;
 	}
 }

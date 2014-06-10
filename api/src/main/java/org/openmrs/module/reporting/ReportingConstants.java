@@ -20,6 +20,9 @@ import org.openmrs.Location;
 import org.openmrs.PatientIdentifierType;
 import org.openmrs.api.GlobalPropertyListener;
 import org.openmrs.api.context.Context;
+import org.openmrs.module.reporting.cohort.definition.CohortDefinition;
+import org.openmrs.module.reporting.cohort.definition.service.CohortDefinitionService;
+import org.openmrs.module.reporting.definition.library.AllDefinitionLibraries;
 import org.openmrs.module.reporting.evaluation.parameter.Parameter;
 import org.springframework.util.StringUtils;
 
@@ -49,9 +52,12 @@ public class ReportingConstants implements GlobalPropertyListener {
 	public static final String GLOBAL_PROPERTY_INCLUDE_DATA_EXPORTS = "reporting.includeDataExportsAsDataSetDefinitions";
 	public static final String GLOBAL_PROPERTY_RUN_REPORT_COHORT_FILTER_MODE = "reporting.runReportCohortFilterMode";
 	public static final String GLOBAL_PROPERTY_DEFAULT_DATE_FORMAT = "reporting.defaultDateFormat";
+    public static final String GLOBAL_PROPERTY_TEST_PATIENTS_COHORT_DEFINITION = "reporting.testPatientsCohortDefinition";
 	public static final String DEFAULT_LOCALE_GP_NAME = "reporting.defaultLocale";
 
-	public static final List<String> CACHED_PROPERTIES = Arrays.asList(GLOBAL_PROPERTY_DEFAULT_DATE_FORMAT, DEFAULT_LOCALE_GP_NAME);
+	public static final List<String> CACHED_PROPERTIES = Arrays.asList(
+			GLOBAL_PROPERTY_DEFAULT_DATE_FORMAT, DEFAULT_LOCALE_GP_NAME, GLOBAL_PROPERTY_DATA_EVALUATION_BATCH_SIZE
+	);
 
 	// Constants used within sessions to key report data that can be retrieved
 	public static final String OPENMRS_REPORT_DATA = "__openmrs_report_data";
@@ -87,7 +93,14 @@ public class ReportingConstants implements GlobalPropertyListener {
 	}
 
 	public static final int GLOBAL_PROPERTY_DATA_EVALUATION_BATCH_SIZE() {
-		return getPropertyValueAsInt(GLOBAL_PROPERTY_DATA_EVALUATION_BATCH_SIZE, 1000);
+		if (gpCache.containsKey(GLOBAL_PROPERTY_DATA_EVALUATION_BATCH_SIZE)) {
+			return (Integer)gpCache.get(GLOBAL_PROPERTY_DATA_EVALUATION_BATCH_SIZE);
+		}
+		else {
+			int ret = getPropertyValueAsInt(GLOBAL_PROPERTY_DATA_EVALUATION_BATCH_SIZE, 1000);
+			gpCache.put(GLOBAL_PROPERTY_DATA_EVALUATION_BATCH_SIZE, ret);
+			return ret;
+		}
 	}
 	
 	public static final boolean GLOBAL_PROPERTY_INCLUDE_DATA_EXPORTS() {
@@ -117,6 +130,33 @@ public class ReportingConstants implements GlobalPropertyListener {
 			return df;
 		}
 	}
+
+    public static final CohortDefinition GLOBAL_PROPERTY_TEST_PATIENTS_COHORT_DEFINITION() {
+        String prop = getPropertyValueAsString(GLOBAL_PROPERTY_TEST_PATIENTS_COHORT_DEFINITION);
+        CohortDefinition cohortDefinition;
+        if (StringUtils.hasText(prop)) {
+            if (prop.startsWith("library:")) {
+                prop = prop.substring(prop.indexOf(':') + 1);
+                cohortDefinition = Context.getRegisteredComponents(AllDefinitionLibraries.class).get(0).getDefinition(CohortDefinition.class, prop);
+                if (cohortDefinition == null) {
+                    throw new IllegalStateException("Global property " + GLOBAL_PROPERTY_TEST_PATIENTS_COHORT_DEFINITION + " refers to a library definition that cannot be found: " + prop);
+                }
+            }
+            else {
+                // this is the UUID of a saved CohortDefinition
+                cohortDefinition = Context.getService(CohortDefinitionService.class).getDefinitionByUuid(prop);
+                if (cohortDefinition == null) {
+                    throw new IllegalStateException("Global property " + GLOBAL_PROPERTY_TEST_PATIENTS_COHORT_DEFINITION + " refers to a cohort definition that cannot be found by uuid: " + prop);
+                }
+            }
+        } else {
+            return null;
+        }
+        if (cohortDefinition.getParameters().size() > 0) {
+            throw new IllegalStateException("Global property " + GLOBAL_PROPERTY_TEST_PATIENTS_COHORT_DEFINITION + " must refer to a cohort definition with no parameters, but this has " + cohortDefinition.getParameters().size() + ": " + prop);
+        }
+        return cohortDefinition;
+    }
 
     @Override
     public boolean supportsPropertyName(String s) {
@@ -174,5 +214,9 @@ public class ReportingConstants implements GlobalPropertyListener {
 			}
 		}
 		return defaultValue;
+	}
+
+	public static void clearGlobalPropertyCache() {
+		gpCache.clear();
 	}
 }

@@ -13,13 +13,13 @@
 		indicators, dimensions, and report designs.  The module also provides 
 		an extensible API for developing custom reports and new features.
 	</description>
-	<activator>@MODULE_PACKAGE@.ModuleActivator</activator>
+	<activator>@MODULE_PACKAGE@.ReportingModuleActivator</activator>
 	<updateURL>https://dev.openmrs.org/modules/download/@MODULE_ID@/update.rdf</updateURL>	
-	<require_version>1.6.6</require_version>
+	<require_version>1.9.2</require_version>
 
 	<require_modules>
-	   	<require_module version="0.2.7">org.openmrs.module.serialization.xstream</require_module>
-	   	<require_module version="1.6.1">org.openmrs.module.htmlwidgets</require_module>
+	   	<require_module version="${serializationVersion}">org.openmrs.module.serialization.xstream</require_module>
+	   	<require_module version="${htmlwidgetsVersion}">org.openmrs.module.htmlwidgets</require_module>
 	   	<require_module version="${calculationVersion}">org.openmrs.calculation</require_module>
 	</require_modules>
 
@@ -115,7 +115,7 @@
 	</globalProperty>
 	<globalProperty>
 		<property>reporting.dataEvaluationBatchSize</property>
-		<defaultValue>1000</defaultValue>
+		<defaultValue>-1</defaultValue>
 		<description>
 			This determines whether to run evaluators for Data in batches and what the size of those batches should be.
 			A value of less than or equal to 0 indicates that no batching is desired.
@@ -130,6 +130,11 @@
         <property>reporting.defaultLocale</property>
         <defaultValue>en</defaultValue>
         <description>Default locale to use when formatting report data</description>
+    </globalProperty>
+    <globalProperty>
+        <property>reporting.testPatientsCohortDefinition</property>
+        <defaultValue></defaultValue>
+        <description>Points to a cohort definition representing all test/fake patients that you want to exclude from all queries and reports. You may set this to the UUID of a saved cohort definition, or to "library:keyInADefinitionLibrary"</description>
     </globalProperty>
 
 	<!--  Advice Points -->
@@ -161,6 +166,10 @@
 		<point>${project.parent.groupId}.${project.parent.artifactId}.indicator.dimension.service.DimensionService</point>
 		<class>${project.parent.groupId}.${project.parent.artifactId}.evaluation.EvaluationProfiler</class>
 	</advice>
+    <advice>
+        <point>${project.parent.groupId}.${project.parent.artifactId}.query.visit.service.VisitQueryService</point>
+        <class>${project.parent.groupId}.${project.parent.artifactId}.evaluation.EvaluationProfiler</class>
+    </advice>
 	<advice>
 		<point>${project.parent.groupId}.${project.parent.artifactId}.query.encounter.service.EncounterQueryService</point>
 		<class>${project.parent.groupId}.${project.parent.artifactId}.evaluation.EvaluationProfiler</class>
@@ -192,6 +201,7 @@
 	<mappingFiles>
 		ReportDesign.hbm.xml
 		ReportRequest.hbm.xml
+		IdsetMember.hbm.xml
 	</mappingFiles>
 	
 	<!-- dwr -->

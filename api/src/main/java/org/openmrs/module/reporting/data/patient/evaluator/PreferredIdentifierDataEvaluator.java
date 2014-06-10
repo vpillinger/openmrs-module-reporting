@@ -13,19 +13,18 @@
  */
 package org.openmrs.module.reporting.data.patient.evaluator;
 
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
-
 import org.openmrs.PatientIdentifier;
 import org.openmrs.annotation.Handler;
 import org.openmrs.api.context.Context;
 import org.openmrs.module.reporting.data.patient.EvaluatedPatientData;
 import org.openmrs.module.reporting.data.patient.definition.PatientDataDefinition;
 import org.openmrs.module.reporting.data.patient.definition.PreferredIdentifierDataDefinition;
-import org.openmrs.module.reporting.dataset.query.service.DataSetQueryService;
 import org.openmrs.module.reporting.evaluation.EvaluationContext;
 import org.openmrs.module.reporting.evaluation.EvaluationException;
+import org.openmrs.module.reporting.evaluation.service.EvaluationService;
+import org.openmrs.module.reporting.evaluation.querybuilder.HqlQueryBuilder;
+
+import java.util.Map;
 
 /**
  * Evaluates a PreferredIdentifierDataDefinition to produce a PatientData
@@ -46,36 +45,20 @@ public class PreferredIdentifierDataEvaluator implements PatientDataEvaluator {
 		if ((context.getBaseCohort() != null && context.getBaseCohort().isEmpty()) || def.getIdentifierType() == null) {
 			return c;
 		}
-		
-		DataSetQueryService qs = Context.getService(DataSetQueryService.class);
 
-		StringBuilder hql = new StringBuilder();
-		Map<String, Object> m = new HashMap<String, Object>();
-
-		hql.append("select		pi.patient.patientId, pi ");
-		hql.append("from		PatientIdentifier as pi ");
-		hql.append("where 		voided = false ");
-		hql.append("and 		pi.identifierType = :idType ");
-		m.put("idType", def.getIdentifierType());
-
-		if (context.getBaseCohort() != null) {
-			hql.append("and 	pi.patient.patientId in (:patientIds) ");
-			m.put("patientIds", context.getBaseCohort());
-		}
-
-		if (def.getLocation() != null) {
-			hql.append("and 	pi.location = :location) ");
-			m.put("location", def.getLocation());
-		}
+		HqlQueryBuilder q = new HqlQueryBuilder();
+		q.select("pi.patient.patientId", "pi");
+		q.from(PatientIdentifier.class, "pi");
+		q.whereEqual("pi.identifierType", def.getIdentifierType());
+		q.whereEqual("pi.location", def.getLocation());
+		q.wherePatientIn("pi.patient.patientId", context);
 
 		// Order to ensure that the preferred is based on the preferred flag first, dateCreated second
-		hql.append("order by 	pi.preferred asc, pi.dateCreated asc");
+		q.orderAsc("pi.preferred").orderAsc("pi.dateCreated");
 
-		List<Object> queryResult = qs.executeHqlQuery(hql.toString(), m);
-		for (Object o : queryResult) {
-			Object[] parts = (Object[]) o;
-			c.addData((Integer)parts[0], parts[1]);
-		}
+		Map<Integer, Object> m = Context.getService(EvaluationService.class).evaluateToMap(q, Integer.class, Object.class);
+		c.setData(m);
+
 		return c;
 	}
 }

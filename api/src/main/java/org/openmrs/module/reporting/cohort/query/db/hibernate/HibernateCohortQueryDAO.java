@@ -1,18 +1,5 @@
 package org.openmrs.module.reporting.cohort.query.db.hibernate;
 
-import java.text.ParseException;
-import java.util.ArrayList;
-import java.util.Calendar;
-import java.util.Collection;
-import java.util.Date;
-import java.util.HashMap;
-import java.util.Iterator;
-import java.util.List;
-import java.util.ListIterator;
-import java.util.Map;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
-
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 import org.hibernate.CacheMode;
@@ -38,6 +25,7 @@ import org.openmrs.api.context.Context;
 import org.openmrs.api.db.DAOException;
 import org.openmrs.module.reporting.IllegalDatabaseAccessException;
 import org.openmrs.module.reporting.ReportingException;
+import org.openmrs.module.reporting.cohort.Cohorts;
 import org.openmrs.module.reporting.cohort.query.db.CohortQueryDAO;
 import org.openmrs.module.reporting.common.DateUtil;
 import org.openmrs.module.reporting.common.DurationUnit;
@@ -49,6 +37,19 @@ import org.openmrs.module.reporting.evaluation.parameter.Parameter;
 import org.openmrs.module.reporting.evaluation.parameter.ParameterException;
 import org.openmrs.module.reporting.report.util.ReportUtil;
 import org.openmrs.module.reporting.report.util.SqlUtils;
+
+import java.text.ParseException;
+import java.util.ArrayList;
+import java.util.Calendar;
+import java.util.Collection;
+import java.util.Date;
+import java.util.HashMap;
+import java.util.Iterator;
+import java.util.List;
+import java.util.ListIterator;
+import java.util.Map;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 public class HibernateCohortQueryDAO implements CohortQueryDAO {
 
@@ -655,7 +656,7 @@ public class HibernateCohortQueryDAO implements CohortQueryDAO {
 
 		Cohort ret;
 		if (doInvert) {
-			ret = Context.getPatientSetService().getAllPatients();
+            ret = Cohorts.allPatients(null);
 			ret.getMemberIds().removeAll(query.list());
 		} else {
 			ret = new Cohort(query.list());
@@ -663,56 +664,6 @@ public class HibernateCohortQueryDAO implements CohortQueryDAO {
 
 		return ret;
 	}
-
-	/**
-     * @see org.openmrs.module.reporting.cohort.query.db.CohortQueryDAO#getPatientsHavingProgramEnrollment(java.util.List, java.util.Date, java.util.Date, java.util.Date, java.util.Date)
-     */
-    public Cohort getPatientsHavingProgramEnrollment(List<Program> programs, Date enrolledOnOrAfter,
-                                                     Date enrolledOnOrBefore, Date completedOnOrAfter,
-                                                     Date completedOnOrBefore) {
-		List<Integer> programIds = new ArrayList<Integer>();
-		for (Program program : programs)
-			programIds.add(program.getProgramId());
-
-		// Create SQL query
-		StringBuilder sql = new StringBuilder();
-		sql.append("select pp.patient_id ");
-		sql.append("from patient_program pp ");
-		sql.append("  inner join patient p on pp.patient_id = p.patient_id ");
-		sql.append("where pp.voided = false and p.voided = false ");
-
-		// Create a list of clauses
-		if (programIds != null && !programIds.isEmpty())
-			sql.append(" and pp.program_id in (:programIds) ");
-		if (enrolledOnOrAfter != null)
-			sql.append(" and pp.date_enrolled >= :enrolledOnOrAfter ");
-		if (enrolledOnOrBefore != null)
-			sql.append(" and pp.date_enrolled <= :enrolledOnOrBefore ");
-		if (completedOnOrAfter != null)
-			sql.append(" and pp.date_completed >= :completedOnOrAfter ");
-		if (completedOnOrBefore != null)
-			sql.append(" and pp.date_completed <= :completedOnOrBefore ");
-
-		sql.append(" group by pp.patient_id ");
-		log.debug("query: " + sql);
-
-		// Execute query
-		Query query = sessionFactory.getCurrentSession().createSQLQuery(sql.toString());
-
-		if (programIds != null && !programIds.isEmpty())
-			query.setParameterList("programIds", programIds);
-		if (enrolledOnOrAfter != null)
-			query.setTimestamp("enrolledOnOrAfter", enrolledOnOrAfter);
-		if (enrolledOnOrBefore != null)
-			query.setTimestamp("enrolledOnOrBefore", DateUtil.getEndOfDayIfTimeExcluded(enrolledOnOrBefore));
-		if (completedOnOrAfter != null)
-			query.setTimestamp("completedOnOrAfter", completedOnOrAfter);
-		if (completedOnOrBefore != null)
-			query.setTimestamp("completedOnOrBefore", DateUtil.getEndOfDayIfTimeExcluded(completedOnOrBefore));
-
-		return new Cohort(query.list());
-    }
-
     
 	/**
      * @see org.openmrs.module.reporting.cohort.query.db.CohortQueryDAO#getPatientsInProgram(java.util.List, java.util.Date, java.util.Date)
@@ -1048,7 +999,7 @@ public class HibernateCohortQueryDAO implements CohortQueryDAO {
 		
 		Cohort ret;
 		if (doInvert) {
-			ret = Context.getPatientSetService().getAllPatients();
+            ret = Cohorts.allPatients(null);
 			ret.getMemberIds().removeAll(query.list());
 		} else {
 			ret = new Cohort(query.list());
